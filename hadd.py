@@ -14,7 +14,8 @@ CFD_REPO = (
 )
 
 out_path = CFD_REPO + "/data/"
-path = CFD_REPO + "/scripts/"
+path = CFD_REPO
+os.makedirs(out_path, exist_ok=True)
 
 
 ROOT.gROOT.SetBatch(True)
@@ -44,8 +45,8 @@ if __name__ == "__main__":
     for config in configurations:
 
         if config not in configRuns.keys():
-            exit()
-
+            continue
+            
         print("Running for config:", config)
         allRunsList = [
             str(x) for x in range(configRuns[config][0], configRuns[config][1] + 1)
