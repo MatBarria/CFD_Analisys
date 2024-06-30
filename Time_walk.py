@@ -31,7 +31,7 @@ for channel in channels:
         print("Running over config: ", config)
 
         file_name = file_names[config]
-        file_path = "/uscms/home/csanmart/nobackup/SNSPD_FCFD/data_LastWeekJune/"
+        file_path = "./data/"
         plot_path = (
             "./plots/"
             + BV[config]
@@ -70,7 +70,7 @@ for channel in channels:
             time_walk,
             config,
             channel,
-            "4",
+            "4", ## degree of the polynomial
             "ch%i_deltaT_vs_amplitud_TimeWalk_fitted" % (channel),
             plot_path,
         )

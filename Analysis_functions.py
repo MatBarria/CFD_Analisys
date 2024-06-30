@@ -220,7 +220,6 @@ def Do_polonomial_fit(
     amplitud_min = amplitude_region[config][ch_amp][0]
     amplitud_max = amplitude_region[config][ch_amp][1]
 
-    number_of_paremeters = "2"
     fit = ROOT.TF1("fit", "pol " + number_of_paremeters, amplitud_min, amplitud_max)
 
     # graph.Fit(fit, "R", "", amplitud_min, amplitud_max);
