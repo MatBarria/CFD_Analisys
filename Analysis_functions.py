@@ -203,7 +203,6 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
         mean_y = hist.GetMean(2)
         if fit.GetParameter(1) > mean_y + 0.1 or fit.GetParameter(1) < mean_y - 0.1:
             time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), mean_y)
-            print("bad fit, Mean y: ", hist.GetMean(2))
         else:
             time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), fit.GetParameter(1))
     draw = False
