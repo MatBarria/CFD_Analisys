@@ -185,6 +185,7 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
         fit = ROOT.TF1("fit", "gaus", fit_low, fit_high)
         tmp_hist.Fit(fit, "Q", "", fit_low, fit_high)
 
+
         tmp_canvas = ROOT.TCanvas("canvas" + str(bin), "canvas" + str(bin))
         tmp_canvas.cd()
         tmp_hist.Draw("hist")
@@ -198,8 +199,13 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
                 + str(bin)
                 + ".png"
             )
-
-        time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), fit.GetParameter(1))
+        
+        mean_y = hist.GetMean(2)
+        if fit.GetParameter(1) > mean_y + 0.1 or fit.GetParameter(1) < mean_y - 0.1:
+            time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), mean_y)
+            print("bad fit, Mean y: ", hist.GetMean(2))
+        else:
+            time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), fit.GetParameter(1))
     draw = False
     if draw:
         canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
@@ -378,6 +384,8 @@ def Draw_bias_scan(
 
     xtitle = "Bias Current [V]" if not use_low_voltage else "Board low voltage [V]"
     htitle = "Bias scan" if not use_low_voltage else "Board low voltage scan"
+    if channel == 3:
+        htitle += " Dt Corrected"
 
     graph = create_TGraph(
         voltages,
@@ -386,8 +394,6 @@ def Draw_bias_scan(
         ey=error,
         axis_title=[xtitle, "Time resolution [ns]"],
     )
-    if channel == 3:
-        htitle += " Dt Corrected"
     graph.SetTitle(htitle)
 
     graph.SetMarkerStyle(8)

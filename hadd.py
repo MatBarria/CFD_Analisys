@@ -28,6 +28,7 @@ configRuns = {
     "138": [715784, 715826],
     "139": [715827, 715895],
     "140": [715896, 715978],
+    "143": [716001, 716018],
 }
 
 if __name__ == "__main__":
@@ -46,7 +47,7 @@ if __name__ == "__main__":
 
         if config not in configRuns.keys():
             continue
-            
+
         print("Running for config:", config)
         allRunsList = [
             str(x) for x in range(configRuns[config][0], configRuns[config][1] + 1)
