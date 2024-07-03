@@ -2,7 +2,6 @@ import ROOT as ROOT
 import os
 
 from configurations import (
-    file_names,
     low_voltage,
     BV,
     channels,
@@ -33,9 +32,9 @@ for channel in channels:
         file_path = "./data/"
         plot_path = (
             "./plots/"
-            + BV[configs]
+            + BV[configs[0]]
             + "V/LV"
-            + low_voltage[configs].replace(".", "p")
+            + low_voltage[configs[0]].replace(".", "p")
             + "/"
         )
         os.makedirs(plot_path, exist_ok=True)
@@ -112,8 +111,9 @@ for channel in channels:
         sigma = []
         error = []
         # for configs, lv in low_voltage.items():
-        for configs, bv in BV.items():
-            if bias == bv:
+        # for configs, bv in BV.items():
+        for configs in configurations:
+            if bias == BV[configs[0]]:
                 lv.append(float(low_voltage[configs[0]]))
                 sigma.append(sigma_config[configs[0]])
                 error.append(error_config[configs[0]])
@@ -136,11 +136,11 @@ for channel in channels:
         sigma = []
         error = []
         # for configs, lv in low_voltage.items():
-        for configs, lv in low_voltage.items():
-            if voltage == lv:
-                bias.append(float(BV[configs][0]))
-                sigma.append(sigma_config[configs][0])
-                error.append(error_config[configs][0])
+        for configs in configurations:
+            if voltage == low_voltage[configs[0]]:
+                bias.append(float(BV[configs[0]]))
+                sigma.append(sigma_config[configs[0]])
+                error.append(error_config[configs[0]])
 
         Draw_bias_scan(
             bias,

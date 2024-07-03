@@ -23,11 +23,11 @@ file_names = {
     "140": "run715896_715978_skimpy.root",
     "143": "run716003_716018_skimpy.root",
     "147": "run716031_716127_skimpy.root",
-    "150": "run716128_716242_skimpy.root",
+    "150": "run716128_716229_skimpy.root",
 }
 
 
-# channels=[3]
+# channels = [3]
 channels = [3, 4, 5]
 
 BV = OrderedDict()
@@ -109,8 +109,8 @@ amplitude_region = {
     },
     "143": {
         "ch3": [100, 185],
-        "ch4": [230, 380],
-        "ch5": [230, 400],
+        "ch4": [270, 450],
+        "ch5": [250, 450],
     },
     "147": {
         "ch3": [80, 180],

@@ -55,10 +55,10 @@ def Get_final_branches(file_path, cofigurations, channel):
 
         amplitudes = branches["amp"].array()
         LP2_50 = branches["LP2_50"].array()
-        tracker_time = np.concatenate(tracker_time, LP2_50[:, 7][all_cuts])
-        channel_time = np.concatenate(channel_time, LP2_50[:, 3 - channel][all_cuts])
+        tracker_time = np.concatenate((tracker_time, LP2_50[:, 7][all_cuts]))
+        channel_time = np.concatenate((channel_time, LP2_50[:, channel - 3][all_cuts]))
         channel_amplitude = np.concatenate(
-            channel_amplitude, amplitudes[:, channel][all_cuts]
+            (channel_amplitude, amplitudes[:, channel][all_cuts])
         )
 
     return channel_amplitude, channel_time, tracker_time
@@ -167,7 +167,6 @@ def Get_deltaT_vs_amplitud_2D_map(
     ]
 
     deltaT = (channel_time - tracker_time) * 1e9
-
     hist_name = "Amp vs Delta T " + ch_amp
     deltaT_vs_amplitud = create_TH2D(
         np.column_stack((channel_amplitude, deltaT)),
