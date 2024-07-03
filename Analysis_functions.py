@@ -8,6 +8,7 @@ from configurations import (
     x_cuts,
     y_cuts,
     deltaT_binning,
+    file_names,
 )
 
 from histo_utilities import (
@@ -17,29 +18,61 @@ from histo_utilities import (
 )
 
 
-def Draw_amp(file_path, file_name, config, channel, plot_name, plot_path):
+def Get_tracker_cuts(branches):
 
-    branches = uproot.open(file_path + file_name)["pulse"]
     amplitudes = branches["amp"].array()
+    return (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
+
+
+def Get_fiducial_cuts(branches, config, channel):
+
+    ch_amp = "ch" + str(channel)
     x = branches["x_dut"].array()[:, 5]
     y = branches["y_dut"].array()[:, 5]
 
-    ch_amp = "ch" + str(channel)
-
-    tracker_cuts = (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
-    # tracker_cuts = (branches['nplanes'].array() > 8) & (branches['npix'].array() > 3) &(amplitudes[:, 7] > 100)
     fiducial_cuts = (
         (x > x_cuts[config][ch_amp][0])
         & (x < x_cuts[config][ch_amp][1])
         & (y > y_cuts[config][ch_amp][0])
         & (y < y_cuts[config][ch_amp][1])
     )
-    all_cuts = (tracker_cuts) & (fiducial_cuts)
+    return fiducial_cuts
 
+
+def Get_final_branches(file_path, cofigurations, channel):
+
+    channel_time = np.array([])
+    tracker_time = np.array([])
+    channel_amplitude = np.array([])
+
+    for config in cofigurations:
+
+        branches = uproot.open(file_path + file_names[config])["pulse"]
+
+        tracker_cuts = Get_tracker_cuts(branches)
+        fiducial_cuts = Get_fiducial_cuts(branches, config, channel)
+        all_cuts = (tracker_cuts) & (fiducial_cuts)
+
+        amplitudes = branches["amp"].array()
+        LP2_50 = branches["LP2_50"].array()
+        tracker_time = np.concatenate(tracker_time, LP2_50[:, 7][all_cuts])
+        channel_time = np.concatenate(channel_time, LP2_50[:, 3 - channel][all_cuts])
+        channel_amplitude = np.concatenate(
+            channel_amplitude, amplitudes[:, channel][all_cuts]
+        )
+
+    return channel_amplitude, channel_time, tracker_time
+
+
+def Draw_amp(file_path, configurations, channel, plot_name, plot_path):
+
+    amplitude_channel, _, _ = Get_final_branches(file_path, configurations, channel)
+
+    ch_amp = "ch" + str(channel)
     title = ["Amplitude [mV]", "Counts"]
 
     amplitude_hist = create_TH1D(
-        amplitudes[:, channel][all_cuts],
+        amplitude_channel,
         title="amplitude " + ch_amp,
         axis_title=[title[0], title[1]],
         binning=[100, 0, 500],
@@ -101,27 +134,23 @@ def Draw_amp(file_path, file_name, config, channel, plot_name, plot_path):
 
 
 def Get_deltaT_vs_amplitud_2D_map(
-    file_name,
     file_path,
-    config,
+    configurations,
     channel,
     plot_name,
     plot_path,
     draw=False,
 ):
 
-    branches = uproot.open(file_path + file_name)["pulse"]
     title = ["Amplitude [mV]", "Delta T [ns]"]
 
-    branches = uproot.open(file_path + file_name)["pulse"]
-    amplitudes = branches["amp"].array()
-    LP2_50 = branches["LP2_50"].array()
-    x = branches["x_dut"].array()[:, 5]
-    y = branches["y_dut"].array()[:, 5]
+    channel_amplitude, channel_time, tracker_time = Get_final_branches(
+        file_path, configurations, channel
+    )
 
     ch_amp = "ch" + str(channel)
-    amplitud_min = amplitude_region[config][ch_amp][0]
-    amplitud_max = amplitude_region[config][ch_amp][1]
+    amplitud_min = amplitude_region[configurations[0]][ch_amp][0]
+    amplitud_max = amplitude_region[configurations[0]][ch_amp][1]
     if channel == 3:
         bin_width_amplitud = 5
     else:
@@ -132,28 +161,16 @@ def Get_deltaT_vs_amplitud_2D_map(
         bin_number_amplitud,
         amplitud_min,
         amplitud_max,
-        deltaT_binning[config][ch_amp][0],
-        deltaT_binning[config][ch_amp][1],
-        deltaT_binning[config][ch_amp][2],
+        deltaT_binning[ch_amp][0],
+        deltaT_binning[ch_amp][1],
+        deltaT_binning[ch_amp][2],
     ]
 
-    tracker_cuts = (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
-    # tracker_cuts = (branches['nplanes'].array() > 8) & (branches['npix'].array() > 3) &(amplitudes[:, 7] > 100)
-    fiducial_cuts = (
-        (x > x_cuts[config][ch_amp][0])
-        & (x < x_cuts[config][ch_amp][1])
-        & (y > y_cuts[config][ch_amp][0])
-        & (y < y_cuts[config][ch_amp][1])
-    )
-    # amplitude_cuts = np.greater_equal(.5*amplitudes[:,3] , amplitudes[:,2])
-    # amplitude_cuts = .5*amplitudes[:,3] > amplitudes[:,2]
-
-    all_cuts = (tracker_cuts) & (fiducial_cuts)
-    deltaT = (LP2_50[:, channel - 3] - LP2_50[:, 7]) * 1e9
+    deltaT = (channel_time - tracker_time) * 1e9
 
     hist_name = "Amp vs Delta T " + ch_amp
     deltaT_vs_amplitud = create_TH2D(
-        np.column_stack((amplitudes[:, channel][all_cuts], deltaT[all_cuts])),
+        np.column_stack((channel_amplitude, deltaT)),
         hist_name,
         axis_title=[title[0], title[1], "counts"],
         binning=bins,
@@ -185,7 +202,6 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
         fit = ROOT.TF1("fit", "gaus", fit_low, fit_high)
         tmp_hist.Fit(fit, "Q", "", fit_low, fit_high)
 
-
         tmp_canvas = ROOT.TCanvas("canvas" + str(bin), "canvas" + str(bin))
         tmp_canvas.cd()
         tmp_hist.Draw("hist")
@@ -199,7 +215,7 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
                 + str(bin)
                 + ".png"
             )
-        
+
         mean_y = hist.GetMean(2)
         if fit.GetParameter(1) > mean_y + 0.1 or fit.GetParameter(1) < mean_y - 0.1:
             time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), mean_y)
@@ -218,12 +234,19 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
 
 
 def Do_polonomial_fit(
-    hist, graph, config, channel, number_of_paremeters, plot_name, plot_path, draw=True
+    hist,
+    graph,
+    configurations,
+    channel,
+    number_of_paremeters,
+    plot_name,
+    plot_path,
+    draw=True,
 ):
 
     ch_amp = "ch" + str(channel)
-    amplitud_min = amplitude_region[config][ch_amp][0]
-    amplitud_max = amplitude_region[config][ch_amp][1]
+    amplitud_min = amplitude_region[configurations[0]][ch_amp][0]
+    amplitud_max = amplitude_region[configurations[0]][ch_amp][1]
 
     fit = ROOT.TF1("fit", "pol " + number_of_paremeters, amplitud_min, amplitud_max)
 
@@ -248,48 +271,35 @@ def Do_polonomial_fit(
 
 
 def Get_deltaT_vs_amplitud_Corrected(
-    file_name, file_path, fit, config, channel, plot_name, plot_path
+    file_path, fit, configurations, channel, plot_name, plot_path
 ):
 
-    branches = uproot.open(file_path + file_name)["pulse"]
     title = ["Amplitude [mV]", "Delta T[ns]"]
 
-    branches = uproot.open(file_path + file_name)["pulse"]
-    amplitudes = branches["amp"].array()
-    LP2_50 = branches["LP2_50"].array()
-    x = branches["x_dut"].array()[:, 5]
-    y = branches["y_dut"].array()[:, 5]
+    channel_amplitude, channel_time, tracker_time = Get_final_branches(
+        file_path, configurations, channel
+    )
 
     ch_amp = "ch" + str(channel)
-    amplitud_min = amplitude_region[config][ch_amp][0]
-    amplitud_max = amplitude_region[config][ch_amp][1]
+    amplitud_min = amplitude_region[configurations[0]][ch_amp][0]
+    amplitud_max = amplitude_region[configurations[0]][ch_amp][1]
     if channel == 3:
         bin_width_amplitud = 5
     else:
         bin_width_amplitud = 15
     bin_number_amplitud = int((amplitud_max - amplitud_min) / bin_width_amplitud)
-    deltaT_range = deltaT_binning[config][ch_amp][2] - deltaT_binning[config][ch_amp][1]
+    deltaT_range = deltaT_binning[ch_amp][2] - deltaT_binning[ch_amp][1]
 
     bins = [
         bin_number_amplitud,
         amplitud_min,
         amplitud_max,
-        deltaT_binning[config][ch_amp][0],
+        deltaT_binning[ch_amp][0],
         -deltaT_range / 2,
         deltaT_range / 2,
     ]
 
-    tracker_cuts = (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
-    # tracker_cuts = (branches['nplanes'].array() > 8) & (branches['npix'].array() > 3) &(amplitudes[:, 7] > 100)
-    fiducial_cuts = (
-        (x > x_cuts[config][ch_amp][0])
-        & (x < x_cuts[config][ch_amp][1])
-        & (y > y_cuts[config][ch_amp][0])
-        & (y < y_cuts[config][ch_amp][1])
-    )
-
-    all_cuts = (tracker_cuts) & (fiducial_cuts)
-    deltaT = (LP2_50[:, channel - 3] - LP2_50[:, 7]) * 1e9
+    deltaT = (channel_time - tracker_time) * 1e9
 
     # TODO: I know this can be automatized but idk how to get a power of an array...
     number_of_paremeters = fit.GetNpar()
@@ -297,11 +307,11 @@ def Get_deltaT_vs_amplitud_Corrected(
     for i in range(0, number_of_paremeters):
         # print(amplitudes[:, channel].array())
         corrected_deltaT -= fit.GetParameter(i) * np.power(
-            np.array(amplitudes[:, channel]), i
+            np.array(channel_amplitude), i
         )
 
     deltaT_vs_amplitud_corrected = create_TH2D(
-        np.column_stack((amplitudes[:, channel][all_cuts], corrected_deltaT[all_cuts])),
+        np.column_stack((channel_amplitude, corrected_deltaT)),
         "Corrected Amp vs Delta T " + ch_amp,
         axis_title=[title[0], title[1], "counts"],
         binning=bins,
@@ -312,7 +322,7 @@ def Get_deltaT_vs_amplitud_Corrected(
     # map_canvas.SaveAs(plot_path + plot_name + ".png")
     time_walk_corrected = Get_distribution_centers(
         deltaT_vs_amplitud_corrected,
-        config,
+        channel,
         "ch%i_deltaT_vs_amplitud_TimeWalk_corrected" % (channel),
         plot_path,
         False,
@@ -321,7 +331,7 @@ def Get_deltaT_vs_amplitud_Corrected(
     Do_polonomial_fit(
         deltaT_vs_amplitud_corrected,
         time_walk_corrected,
-        config,
+        configurations,
         channel,
         "2",
         plot_name,
@@ -331,7 +341,7 @@ def Get_deltaT_vs_amplitud_Corrected(
     return deltaT_vs_amplitud_corrected
 
 
-def Get_time_resolution(hist, config, channel, plot_name, plot_path):
+def Get_time_resolution(hist, configurations, channel, plot_name, plot_path):
 
     time_difference = hist.ProjectionY("Time Res")
     htitle = "Delta T ch" + str(channel)
@@ -361,7 +371,7 @@ def Get_time_resolution(hist, config, channel, plot_name, plot_path):
     sigma_text.SetNDC()
     # event_text.SetTextAlign(22)
     channel_text = ROOT.TText(
-        0.55, 0.7, "channel: %i BV:" % (channel) + BV[config] + "V"
+        0.55, 0.7, "channel: %i BV:" % (channel) + BV[configurations[0]] + "V"
     )
     channel_text.SetNDC()
 
