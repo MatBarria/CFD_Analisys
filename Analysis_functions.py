@@ -1,31 +1,26 @@
-import numpy as np
-import ROOT as ROOT
-import uproot
 import os
+from ROOT import TCanvas, TGraph, TF1, kBlack, kRed, TText
+import numpy as np
+import uproot
+
 from configurations import (
     BV,
     amplitude_region,
-    x_cuts,
-    y_cuts,
     deltaT_binning,
     file_names,
+    x_cuts,
+    y_cuts,
 )
 
-from histo_utilities import (
-    create_TH1D,
-    create_TH2D,
-    create_TGraph,
-)
+from histo_utilities import create_TGraph, create_TH1D, create_TH2D
 
 
-def Get_tracker_cuts(branches):
-
+def get_tracker_cuts(branches):
     amplitudes = branches["amp"].array()
     return (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
 
 
-def Get_fiducial_cuts(branches, config, channel):
-
+def get_fiducial_cuts(branches, config, channel):
     ch_amp = "ch" + str(channel)
     x = branches["x_dut"].array()[:, 5]
     y = branches["y_dut"].array()[:, 5]
@@ -39,18 +34,16 @@ def Get_fiducial_cuts(branches, config, channel):
     return fiducial_cuts
 
 
-def Get_final_branches(file_path, cofigurations, channel):
-
+def get_final_branches(file_path, cofigurations, channel):
     channel_time = np.array([])
     tracker_time = np.array([])
     channel_amplitude = np.array([])
 
     for config in cofigurations:
-
         branches = uproot.open(file_path + file_names[config])["pulse"]
 
-        tracker_cuts = Get_tracker_cuts(branches)
-        fiducial_cuts = Get_fiducial_cuts(branches, config, channel)
+        tracker_cuts = get_tracker_cuts(branches)
+        fiducial_cuts = get_fiducial_cuts(branches, config, channel)
         all_cuts = (tracker_cuts) & (fiducial_cuts)
 
         amplitudes = branches["amp"].array()
@@ -64,9 +57,8 @@ def Get_final_branches(file_path, cofigurations, channel):
     return channel_amplitude, channel_time, tracker_time
 
 
-def Draw_amp(file_path, configurations, channel, plot_name, plot_path):
-
-    amplitude_channel, _, _ = Get_final_branches(file_path, configurations, channel)
+def draw_amp(file_path, configurations, channel, plot_name, plot_path):
+    amplitude_channel, _, _ = get_final_branches(file_path, configurations, channel)
 
     ch_amp = "ch" + str(channel)
     title = ["Amplitude [mV]", "Counts"]
@@ -78,8 +70,8 @@ def Draw_amp(file_path, configurations, channel, plot_name, plot_path):
         binning=[100, 0, 500],
     )
 
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+    canvas = TCanvas("canvas", "canvas", 800, 600)
+    canvas = TCanvas("canvas", "canvas", 800, 600)
 
     amplitude_hist.Draw("hist e")
     canvas.Draw()
@@ -98,7 +90,7 @@ def Draw_amp(file_path, configurations, channel, plot_name, plot_path):
 #     y = branches['y_dut'].array()[:, 5]
 
 #     ch_amp = "ch" + str(channel)
-#     amplitud_min = amplitude_region[config][ch_amp][0]
+#     amplitud_min = hmplitude_region[config][ch_amp][0]
 #     amplitud_max = amplitude_region[config][ch_amp][1]
 #     if channel == 3:
 #         bin_width_amplitud = 5
@@ -133,7 +125,7 @@ def Draw_amp(file_path, configurations, channel, plot_name, plot_path):
 #     return deltaT_vs_amplitud
 
 
-def Get_deltaT_vs_amplitud_2D_map(
+def get_deltaT_vs_amplitud_2D_map(
     file_path,
     configurations,
     channel,
@@ -141,10 +133,9 @@ def Get_deltaT_vs_amplitud_2D_map(
     plot_path,
     draw=False,
 ):
-
     title = ["Amplitude [mV]", "Delta T [ns]"]
 
-    channel_amplitude, channel_time, tracker_time = Get_final_branches(
+    channel_amplitude, channel_time, tracker_time = get_final_branches(
         file_path, configurations, channel
     )
 
@@ -176,20 +167,18 @@ def Get_deltaT_vs_amplitud_2D_map(
     )
 
     if draw:
-        map_canvas = ROOT.TCanvas("2DMap", "2DMap", 800, 600)
+        map_canvas = TCanvas("2DMap", "2DMap", 800, 600)
         deltaT_vs_amplitud.Draw("COLZ")
         map_canvas.SaveAs(plot_path + plot_name + ".png")
     return deltaT_vs_amplitud
 
 
-def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
-
+def get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
     os.makedirs(plot_path + "fits/", exist_ok=True)
     bins_number = hist.GetXaxis().GetNbins()
 
-    time_walk = ROOT.TGraph()
+    time_walk = TGraph()
     for bin in range(1, bins_number + 1):
-
         tmp_hist = hist.ProjectionY("py", bin, bin)
 
         rms = tmp_hist.GetRMS()
@@ -198,10 +187,10 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
         fit_low = mean - 1.5 * rms
         fit_high = mean + 1.5 * rms
 
-        fit = ROOT.TF1("fit", "gaus", fit_low, fit_high)
+        fit = TF1("fit", "gaus", fit_low, fit_high)
         tmp_hist.Fit(fit, "Q", "", fit_low, fit_high)
 
-        tmp_canvas = ROOT.TCanvas("canvas" + str(bin), "canvas" + str(bin))
+        tmp_canvas = TCanvas("canvas" + str(bin), "canvas" + str(bin))
         tmp_canvas.cd()
         tmp_hist.Draw("hist")
         fit.Draw("same")
@@ -222,17 +211,17 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
             time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), fit.GetParameter(1))
     draw = False
     if draw:
-        canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+        canvas = TCanvas("canvas", "canvas", 800, 600)
         hist.Draw("COLZ")
         time_walk.SetMarkerStyle(8)
         time_walk.SetMarkerSize(0.8)
-        time_walk.SetMarkerColor(ROOT.kBlack)
+        time_walk.SetMarkerColor(kBlack)
         time_walk.Draw("P Same")
         canvas.SaveAs(plot_path + plot_name + ".png")
     return time_walk
 
 
-def Do_polonomial_fit(
+def do_polonomial_fit(
     hist,
     graph,
     configurations,
@@ -242,12 +231,11 @@ def Do_polonomial_fit(
     plot_path,
     draw=True,
 ):
-
     ch_amp = "ch" + str(channel)
     amplitud_min = amplitude_region[configurations[0]][ch_amp][0]
     amplitud_max = amplitude_region[configurations[0]][ch_amp][1]
 
-    fit = ROOT.TF1("fit", "pol " + number_of_paremeters, amplitud_min, amplitud_max)
+    fit = TF1("fit", "pol " + number_of_paremeters, amplitud_min, amplitud_max)
 
     # graph.Fit(fit, "R", "", amplitud_min, amplitud_max);
     graph.Fit(fit, "QR", "", amplitud_min, amplitud_max)
@@ -256,11 +244,11 @@ def Do_polonomial_fit(
 
     graph.SetMarkerStyle(8)
     graph.SetMarkerSize(0.8)
-    graph.SetMarkerColor(ROOT.kBlack)
-    fit.SetLineColor(ROOT.kRed)
+    graph.SetMarkerColor(kBlack)
+    fit.SetLineColor(kRed)
 
     if draw:
-        canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+        canvas = TCanvas("canvas", "canvas", 800, 600)
         hist.Draw("COLZ")
         graph.Draw("P Same")
         fit.Draw("Same")
@@ -269,13 +257,12 @@ def Do_polonomial_fit(
     return fit
 
 
-def Get_deltaT_vs_amplitud_Corrected(
+def get_deltaT_vs_amplitud_corrected(
     file_path, fit, configurations, channel, plot_name, plot_path
 ):
-
     title = ["Amplitude [mV]", "Delta T[ns]"]
 
-    channel_amplitude, channel_time, tracker_time = Get_final_branches(
+    channel_amplitude, channel_time, tracker_time = get_final_branches(
         file_path, configurations, channel
     )
 
@@ -319,7 +306,7 @@ def Get_deltaT_vs_amplitud_Corrected(
     # map_canvas = ROOT.TCanvas("2DMap", "2DMap", 800, 600)
     # deltaT_vs_amplitud.Draw("COLZ")
     # map_canvas.SaveAs(plot_path + plot_name + ".png")
-    time_walk_corrected = Get_distribution_centers(
+    time_walk_corrected = get_distribution_centers(
         deltaT_vs_amplitud_corrected,
         channel,
         "ch%i_deltaT_vs_amplitud_TimeWalk_corrected" % (channel),
@@ -327,7 +314,7 @@ def Get_deltaT_vs_amplitud_Corrected(
         False,
     )
 
-    Do_polonomial_fit(
+    do_polonomial_fit(
         deltaT_vs_amplitud_corrected,
         time_walk_corrected,
         configurations,
@@ -340,8 +327,7 @@ def Get_deltaT_vs_amplitud_Corrected(
     return deltaT_vs_amplitud_corrected
 
 
-def Get_time_resolution(hist, configurations, channel, plot_name, plot_path):
-
+def get_time_resolution(hist, configurations, channel, plot_name, plot_path):
     time_difference = hist.ProjectionY("Time Res")
     htitle = "Delta T ch" + str(channel)
     time_difference.SetTitle(htitle)
@@ -351,7 +337,7 @@ def Get_time_resolution(hist, configurations, channel, plot_name, plot_path):
     mean = time_difference.GetMean()
     fit_low = mean - 1.5 * rms
     fit_high = mean + 1.5 * rms
-    fit = ROOT.TF1("fit_ch" + str(channel), "gaus", fit_low, fit_high)
+    fit = TF1("fit_ch" + str(channel), "gaus", fit_low, fit_high)
     time_difference.Fit(fit, "Q", "", fit_low, fit_high)
 
     # print("For Channel: ", channel)
@@ -361,20 +347,18 @@ def Get_time_resolution(hist, configurations, channel, plot_name, plot_path):
     sigma = fit.GetParameter(2)
     sigma_error = fit.GetParError(2)
 
-    event_text = ROOT.TText(0.55, 0.64, "Events: " + str(time_difference.Integral()))
+    event_text = TText(0.55, 0.64, "Events: " + str(time_difference.Integral()))
     event_text.SetNDC()
     # event_text.SetTextAlign(22)
-    sigma_text = ROOT.TText(
-        0.55, 0.6, "Sigma: %.3f +- %.3f [ns]" % (sigma, sigma_error)
-    )
+    sigma_text = TText(0.55, 0.6, "Sigma: %.3f +- %.3f [ns]" % (sigma, sigma_error))
     sigma_text.SetNDC()
     # event_text.SetTextAlign(22)
-    channel_text = ROOT.TText(
+    channel_text = TText(
         0.55, 0.7, "channel: %i BV:" % (channel) + BV[configurations[0]] + "V"
     )
     channel_text.SetNDC()
 
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+    canvas = TCanvas("canvas", "canvas", 800, 600)
     time_difference.Draw("hist e")
     fit.Draw("Same")
     event_text.Draw("Same")
@@ -386,10 +370,9 @@ def Get_time_resolution(hist, configurations, channel, plot_name, plot_path):
     return sigma, sigma_error
 
 
-def Draw_bias_scan(
+def draw_bias_scan(
     voltages, sigma, error, channel, plot_name, plot_path, use_low_voltage=False
 ):
-
     xtitle = "Bias Current [V]" if not use_low_voltage else "Board low voltage [V]"
     htitle = "Bias scan" if not use_low_voltage else "Board low voltage scan"
     if channel == 3:
@@ -406,8 +389,8 @@ def Draw_bias_scan(
 
     graph.SetMarkerStyle(8)
     graph.SetMarkerSize(0.8)
-    graph.SetMarkerColor(ROOT.kBlack)
+    graph.SetMarkerColor(kBlack)
 
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+    canvas = TCanvas("canvas", "canvas", 800, 600)
     graph.Draw("ALP")
     canvas.SaveAs(plot_path + plot_name + ".png")

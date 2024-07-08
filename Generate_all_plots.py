@@ -1,4 +1,5 @@
-import ROOT as ROOT
+import ROOT
+from ROOT import gROOT, kError
 import os
 
 from configurations import (
@@ -8,25 +9,23 @@ from configurations import (
     configurations,
 )
 from Analysis_functions import (
-    Draw_amp,
-    Get_deltaT_vs_amplitud_2D_map,
-    Get_distribution_centers,
-    Do_polonomial_fit,
-    Get_deltaT_vs_amplitud_Corrected,
-    Get_time_resolution,
-    Draw_bias_scan,
+    draw_amp,
+    get_deltaT_vs_amplitud_2D_map,
+    get_distribution_centers,
+    do_polonomial_fit,
+    get_deltaT_vs_amplitud_corrected,
+    get_time_resolution,
+    draw_bias_scan,
 )
 
-ROOT.gROOT.SetBatch(True)
-ROOT.gErrorIgnoreLevel = ROOT.kError
+gROOT.SetBatch(True)
+ROOT.gErrorIgnoreLevel = kError
 
 for channel in channels:
-
     print("Working in channel: ", channel)
     sigma_config, error_config = {}, {}
 
     for i, configs in enumerate(configurations):
-
         print("Running over configs: ", configs)
 
         file_path = "./data/"
@@ -39,7 +38,7 @@ for channel in channels:
         )
         os.makedirs(plot_path, exist_ok=True)
 
-        Draw_amp(
+        draw_amp(
             file_path,
             configs,
             channel,
@@ -47,7 +46,7 @@ for channel in channels:
             plot_path,
         )
 
-        deltaT_vs_amplitud = Get_deltaT_vs_amplitud_2D_map(
+        deltaT_vs_amplitud = get_deltaT_vs_amplitud_2D_map(
             file_path,
             configs,
             channel,
@@ -55,13 +54,13 @@ for channel in channels:
             plot_path,
         )
 
-        time_walk = Get_distribution_centers(
+        time_walk = get_distribution_centers(
             deltaT_vs_amplitud,
             channel,
             "ch%i_deltaT_vs_amplitud_TimeWalk" % (channel),
             plot_path,
         )
-        time_walk_fit = Do_polonomial_fit(
+        time_walk_fit = do_polonomial_fit(
             deltaT_vs_amplitud,
             time_walk,
             configs,
@@ -71,7 +70,7 @@ for channel in channels:
             plot_path,
         )
 
-        deltaT_vs_amplitud_corrected = Get_deltaT_vs_amplitud_Corrected(
+        deltaT_vs_amplitud_corrected = get_deltaT_vs_amplitud_corrected(
             file_path,
             time_walk_fit,
             configs,
@@ -80,14 +79,14 @@ for channel in channels:
             plot_path,
         )
 
-        sigma, sigma_error = Get_time_resolution(
+        sigma, sigma_error = get_time_resolution(
             deltaT_vs_amplitud,
             configs,
             channel,
             "ch%i_Time_resolution" % (channel),
             plot_path,
         )
-        sigma_corrected, sigma_error_corrected = Get_time_resolution(
+        sigma_corrected, sigma_error_corrected = get_time_resolution(
             deltaT_vs_amplitud_corrected,
             configs,
             channel,
@@ -105,7 +104,6 @@ for channel in channels:
     print("Ready with all the configs")
     # Do low voltage Bias S5can
     for bias in set(BV.values()):
-
         plot_path = "./plots/" + bias + "V/"
         lv = []
         sigma = []
@@ -118,7 +116,7 @@ for channel in channels:
                 sigma.append(sigma_config[configs[0]])
                 error.append(error_config[configs[0]])
 
-        Draw_bias_scan(
+        draw_bias_scan(
             lv,
             sigma,
             error,
@@ -130,7 +128,6 @@ for channel in channels:
 
     # Do High voltage Bias Scan
     for voltage in set(low_voltage.values()):
-
         plot_path = "./plots/"
         bias = []
         sigma = []
@@ -142,7 +139,7 @@ for channel in channels:
                 sigma.append(sigma_config[configs[0]])
                 error.append(error_config[configs[0]])
 
-        Draw_bias_scan(
+        draw_bias_scan(
             bias,
             sigma,
             error,
