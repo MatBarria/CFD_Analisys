@@ -1,52 +1,82 @@
-import numpy as np
-import ROOT as ROOT
-import uproot
 import os
+from ROOT import TCanvas, TGraph, TF1, kBlack, kRed, TText
+import numpy as np
+import uproot
+
 from configurations import (
     BV,
     amplitude_region,
+    deltaT_binning,
+    file_names,
     x_cuts,
     y_cuts,
-    deltaT_binning,
 )
 
-from histo_utilities import (
-    create_TH1D,
-    create_TH2D,
-    create_TGraph,
-)
+from histo_utilities import create_TGraph, create_TH1D, create_TH2D
+
+import matplotlib.pyplot as plt
+import mplhep as hep
+
+plt.style.use(hep.style.CMS)  # or ATLAS/LHCb2
 
 
-def Draw_amp(file_path, file_name, config, channel, plot_name, plot_path):
-
-    branches = uproot.open(file_path + file_name)["pulse"]
+def get_tracker_cuts(branches):
     amplitudes = branches["amp"].array()
+    return (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
+
+
+def get_fiducial_cuts(branches, config, channel):
+    ch_amp = "ch" + str(channel)
     x = branches["x_dut"].array()[:, 5]
     y = branches["y_dut"].array()[:, 5]
 
-    ch_amp = "ch" + str(channel)
-
-    tracker_cuts = (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
-    # tracker_cuts = (branches['nplanes'].array() > 8) & (branches['npix'].array() > 3) &(amplitudes[:, 7] > 100)
     fiducial_cuts = (
         (x > x_cuts[config][ch_amp][0])
         & (x < x_cuts[config][ch_amp][1])
         & (y > y_cuts[config][ch_amp][0])
         & (y < y_cuts[config][ch_amp][1])
     )
-    all_cuts = (tracker_cuts) & (fiducial_cuts)
+    return fiducial_cuts
 
+
+def get_final_branches(file_path, cofigurations, channel):
+    channel_time = np.array([])
+    tracker_time = np.array([])
+    channel_amplitude = np.array([])
+
+    for config in cofigurations:
+        branches = uproot.open(file_path + file_names[config])["pulse"]
+
+        tracker_cuts = get_tracker_cuts(branches)
+        fiducial_cuts = get_fiducial_cuts(branches, config, channel)
+        all_cuts = (tracker_cuts) & (fiducial_cuts)
+
+        amplitudes = branches["amp"].array()
+        LP2_50 = branches["LP2_50"].array()
+        tracker_time = np.concatenate((tracker_time, LP2_50[:, 7][all_cuts]))
+        channel_time = np.concatenate((channel_time, LP2_50[:, channel - 3][all_cuts]))
+        channel_amplitude = np.concatenate(
+            (channel_amplitude, amplitudes[:, channel][all_cuts])
+        )
+
+    return channel_amplitude, channel_time, tracker_time
+
+
+def draw_amp(file_path, configurations, channel, plot_name, plot_path):
+    amplitude_channel, _, _ = get_final_branches(file_path, configurations, channel)
+
+    ch_amp = "ch" + str(channel)
     title = ["Amplitude [mV]", "Counts"]
 
     amplitude_hist = create_TH1D(
-        amplitudes[:, channel][all_cuts],
+        amplitude_channel,
         title="amplitude " + ch_amp,
         axis_title=[title[0], title[1]],
         binning=[100, 0, 500],
     )
 
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+    canvas = TCanvas("canvas", "canvas", 800, 600)
+    canvas = TCanvas("canvas", "canvas", 800, 600)
 
     amplitude_hist.Draw("hist e")
     canvas.Draw()
@@ -65,7 +95,7 @@ def Draw_amp(file_path, file_name, config, channel, plot_name, plot_path):
 #     y = branches['y_dut'].array()[:, 5]
 
 #     ch_amp = "ch" + str(channel)
-#     amplitud_min = amplitude_region[config][ch_amp][0]
+#     amplitud_min = hmplitude_region[config][ch_amp][0]
 #     amplitud_max = amplitude_region[config][ch_amp][1]
 #     if channel == 3:
 #         bin_width_amplitud = 5
@@ -100,28 +130,23 @@ def Draw_amp(file_path, file_name, config, channel, plot_name, plot_path):
 #     return deltaT_vs_amplitud
 
 
-def Get_deltaT_vs_amplitud_2D_map(
-    file_name,
+def get_deltaT_vs_amplitud_2D_map(
     file_path,
-    config,
+    configurations,
     channel,
     plot_name,
     plot_path,
     draw=False,
 ):
-
-    branches = uproot.open(file_path + file_name)["pulse"]
     title = ["Amplitude [mV]", "Delta T [ns]"]
 
-    branches = uproot.open(file_path + file_name)["pulse"]
-    amplitudes = branches["amp"].array()
-    LP2_50 = branches["LP2_50"].array()
-    x = branches["x_dut"].array()[:, 5]
-    y = branches["y_dut"].array()[:, 5]
+    channel_amplitude, channel_time, tracker_time = get_final_branches(
+        file_path, configurations, channel
+    )
 
     ch_amp = "ch" + str(channel)
-    amplitud_min = amplitude_region[config][ch_amp][0]
-    amplitud_max = amplitude_region[config][ch_amp][1]
+    amplitud_min = amplitude_region[configurations[0]][ch_amp][0]
+    amplitud_max = amplitude_region[configurations[0]][ch_amp][1]
     if channel == 3:
         bin_width_amplitud = 5
     else:
@@ -132,48 +157,33 @@ def Get_deltaT_vs_amplitud_2D_map(
         bin_number_amplitud,
         amplitud_min,
         amplitud_max,
-        deltaT_binning[config][ch_amp][0],
-        deltaT_binning[config][ch_amp][1],
-        deltaT_binning[config][ch_amp][2],
+        deltaT_binning[ch_amp][0],
+        deltaT_binning[ch_amp][1],
+        deltaT_binning[ch_amp][2],
     ]
 
-    tracker_cuts = (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
-    # tracker_cuts = (branches['nplanes'].array() > 8) & (branches['npix'].array() > 3) &(amplitudes[:, 7] > 100)
-    fiducial_cuts = (
-        (x > x_cuts[config][ch_amp][0])
-        & (x < x_cuts[config][ch_amp][1])
-        & (y > y_cuts[config][ch_amp][0])
-        & (y < y_cuts[config][ch_amp][1])
-    )
-    # amplitude_cuts = np.greater_equal(.5*amplitudes[:,3] , amplitudes[:,2])
-    # amplitude_cuts = .5*amplitudes[:,3] > amplitudes[:,2]
-
-    all_cuts = (tracker_cuts) & (fiducial_cuts)
-    deltaT = (LP2_50[:, channel - 3] - LP2_50[:, 7]) * 1e9
-
+    deltaT = (channel_time - tracker_time) * 1e9
     hist_name = "Amp vs Delta T " + ch_amp
     deltaT_vs_amplitud = create_TH2D(
-        np.column_stack((amplitudes[:, channel][all_cuts], deltaT[all_cuts])),
+        np.column_stack((channel_amplitude, deltaT)),
         hist_name,
         axis_title=[title[0], title[1], "counts"],
         binning=bins,
     )
 
     if draw:
-        map_canvas = ROOT.TCanvas("2DMap", "2DMap", 800, 600)
+        map_canvas = TCanvas("2DMap", "2DMap", 800, 600)
         deltaT_vs_amplitud.Draw("COLZ")
         map_canvas.SaveAs(plot_path + plot_name + ".png")
     return deltaT_vs_amplitud
 
 
-def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
-
+def get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
     os.makedirs(plot_path + "fits/", exist_ok=True)
     bins_number = hist.GetXaxis().GetNbins()
 
-    time_walk = ROOT.TGraph()
+    time_walk = TGraph()
     for bin in range(1, bins_number + 1):
-
         tmp_hist = hist.ProjectionY("py", bin, bin)
 
         rms = tmp_hist.GetRMS()
@@ -182,11 +192,10 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
         fit_low = mean - 1.5 * rms
         fit_high = mean + 1.5 * rms
 
-        fit = ROOT.TF1("fit", "gaus", fit_low, fit_high)
+        fit = TF1("fit", "gaus", fit_low, fit_high)
         tmp_hist.Fit(fit, "Q", "", fit_low, fit_high)
 
-
-        tmp_canvas = ROOT.TCanvas("canvas" + str(bin), "canvas" + str(bin))
+        tmp_canvas = TCanvas("canvas" + str(bin), "canvas" + str(bin))
         tmp_canvas.cd()
         tmp_hist.Draw("hist")
         fit.Draw("same")
@@ -199,7 +208,7 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
                 + str(bin)
                 + ".png"
             )
-        
+
         mean_y = hist.GetMean(2)
         if fit.GetParameter(1) > mean_y + 0.1 or fit.GetParameter(1) < mean_y - 0.1:
             time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), mean_y)
@@ -207,38 +216,42 @@ def Get_distribution_centers(hist, channel, plot_name, plot_path, draw=True):
             time_walk.AddPoint(hist.GetXaxis().GetBinCenter(bin), fit.GetParameter(1))
     draw = False
     if draw:
-        canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+        canvas = TCanvas("canvas", "canvas", 800, 600)
         hist.Draw("COLZ")
         time_walk.SetMarkerStyle(8)
         time_walk.SetMarkerSize(0.8)
-        time_walk.SetMarkerColor(ROOT.kBlack)
+        time_walk.SetMarkerColor(kBlack)
         time_walk.Draw("P Same")
         canvas.SaveAs(plot_path + plot_name + ".png")
     return time_walk
 
 
-def Do_polonomial_fit(
-    hist, graph, config, channel, number_of_paremeters, plot_name, plot_path, draw=True
+def do_polonomial_fit(
+    hist,
+    graph,
+    configurations,
+    channel,
+    number_of_paremeters,
+    plot_name,
+    plot_path,
+    draw=True,
 ):
-
     ch_amp = "ch" + str(channel)
-    amplitud_min = amplitude_region[config][ch_amp][0]
-    amplitud_max = amplitude_region[config][ch_amp][1]
+    amplitud_min = amplitude_region[configurations[0]][ch_amp][0]
+    amplitud_max = amplitude_region[configurations[0]][ch_amp][1]
 
-    fit = ROOT.TF1("fit", "pol " + number_of_paremeters, amplitud_min, amplitud_max)
+    fit = TF1("fit", "pol " + number_of_paremeters, amplitud_min, amplitud_max)
 
     # graph.Fit(fit, "R", "", amplitud_min, amplitud_max);
     graph.Fit(fit, "QR", "", amplitud_min, amplitud_max)
-    # for i in range(0, fit.GetNpar()):
-    # print("Fit parameter %i: %.5f"%(i, fit.GetParameter(i)))
 
     graph.SetMarkerStyle(8)
     graph.SetMarkerSize(0.8)
-    graph.SetMarkerColor(ROOT.kBlack)
-    fit.SetLineColor(ROOT.kRed)
+    graph.SetMarkerColor(kBlack)
+    fit.SetLineColor(kRed)
 
     if draw:
-        canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+        canvas = TCanvas("canvas", "canvas", 800, 600)
         hist.Draw("COLZ")
         graph.Draw("P Same")
         fit.Draw("Same")
@@ -247,61 +260,46 @@ def Do_polonomial_fit(
     return fit
 
 
-def Get_deltaT_vs_amplitud_Corrected(
-    file_name, file_path, fit, config, channel, plot_name, plot_path
+def get_deltaT_vs_amplitud_corrected(
+    file_path, fit, configurations, channel, plot_name, plot_path
 ):
-
-    branches = uproot.open(file_path + file_name)["pulse"]
     title = ["Amplitude [mV]", "Delta T[ns]"]
 
-    branches = uproot.open(file_path + file_name)["pulse"]
-    amplitudes = branches["amp"].array()
-    LP2_50 = branches["LP2_50"].array()
-    x = branches["x_dut"].array()[:, 5]
-    y = branches["y_dut"].array()[:, 5]
+    channel_amplitude, channel_time, tracker_time = get_final_branches(
+        file_path, configurations, channel
+    )
 
     ch_amp = "ch" + str(channel)
-    amplitud_min = amplitude_region[config][ch_amp][0]
-    amplitud_max = amplitude_region[config][ch_amp][1]
+    amplitud_min = amplitude_region[configurations[0]][ch_amp][0]
+    amplitud_max = amplitude_region[configurations[0]][ch_amp][1]
     if channel == 3:
         bin_width_amplitud = 5
     else:
         bin_width_amplitud = 15
     bin_number_amplitud = int((amplitud_max - amplitud_min) / bin_width_amplitud)
-    deltaT_range = deltaT_binning[config][ch_amp][2] - deltaT_binning[config][ch_amp][1]
+    deltaT_range = deltaT_binning[ch_amp][2] - deltaT_binning[ch_amp][1]
 
     bins = [
         bin_number_amplitud,
         amplitud_min,
         amplitud_max,
-        deltaT_binning[config][ch_amp][0],
+        deltaT_binning[ch_amp][0],
         -deltaT_range / 2,
         deltaT_range / 2,
     ]
 
-    tracker_cuts = (branches["nplanes"].array() > 8) & (amplitudes[:, 7] > 100)
-    # tracker_cuts = (branches['nplanes'].array() > 8) & (branches['npix'].array() > 3) &(amplitudes[:, 7] > 100)
-    fiducial_cuts = (
-        (x > x_cuts[config][ch_amp][0])
-        & (x < x_cuts[config][ch_amp][1])
-        & (y > y_cuts[config][ch_amp][0])
-        & (y < y_cuts[config][ch_amp][1])
-    )
+    deltaT = (channel_time - tracker_time) * 1e9
 
-    all_cuts = (tracker_cuts) & (fiducial_cuts)
-    deltaT = (LP2_50[:, channel - 3] - LP2_50[:, 7]) * 1e9
-
-    # TODO: I know this can be automatized but idk how to get a power of an array...
     number_of_paremeters = fit.GetNpar()
     corrected_deltaT = np.array(deltaT)
     for i in range(0, number_of_paremeters):
         # print(amplitudes[:, channel].array())
         corrected_deltaT -= fit.GetParameter(i) * np.power(
-            np.array(amplitudes[:, channel]), i
+            np.array(channel_amplitude), i
         )
 
     deltaT_vs_amplitud_corrected = create_TH2D(
-        np.column_stack((amplitudes[:, channel][all_cuts], corrected_deltaT[all_cuts])),
+        np.column_stack((channel_amplitude, corrected_deltaT)),
         "Corrected Amp vs Delta T " + ch_amp,
         axis_title=[title[0], title[1], "counts"],
         binning=bins,
@@ -310,18 +308,18 @@ def Get_deltaT_vs_amplitud_Corrected(
     # map_canvas = ROOT.TCanvas("2DMap", "2DMap", 800, 600)
     # deltaT_vs_amplitud.Draw("COLZ")
     # map_canvas.SaveAs(plot_path + plot_name + ".png")
-    time_walk_corrected = Get_distribution_centers(
+    time_walk_corrected = get_distribution_centers(
         deltaT_vs_amplitud_corrected,
-        config,
+        channel,
         "ch%i_deltaT_vs_amplitud_TimeWalk_corrected" % (channel),
         plot_path,
         False,
     )
 
-    Do_polonomial_fit(
+    do_polonomial_fit(
         deltaT_vs_amplitud_corrected,
         time_walk_corrected,
-        config,
+        configurations,
         channel,
         "2",
         plot_name,
@@ -331,8 +329,7 @@ def Get_deltaT_vs_amplitud_Corrected(
     return deltaT_vs_amplitud_corrected
 
 
-def Get_time_resolution(hist, config, channel, plot_name, plot_path):
-
+def get_time_resolution(hist, configurations, channel, plot_name, plot_path):
     time_difference = hist.ProjectionY("Time Res")
     htitle = "Delta T ch" + str(channel)
     time_difference.SetTitle(htitle)
@@ -342,7 +339,7 @@ def Get_time_resolution(hist, config, channel, plot_name, plot_path):
     mean = time_difference.GetMean()
     fit_low = mean - 1.5 * rms
     fit_high = mean + 1.5 * rms
-    fit = ROOT.TF1("fit_ch" + str(channel), "gaus", fit_low, fit_high)
+    fit = TF1("fit_ch" + str(channel), "gaus", fit_low, fit_high)
     time_difference.Fit(fit, "Q", "", fit_low, fit_high)
 
     # print("For Channel: ", channel)
@@ -352,20 +349,18 @@ def Get_time_resolution(hist, config, channel, plot_name, plot_path):
     sigma = fit.GetParameter(2)
     sigma_error = fit.GetParError(2)
 
-    event_text = ROOT.TText(0.55, 0.64, "Events: " + str(time_difference.Integral()))
+    event_text = TText(0.55, 0.64, "Events: " + str(time_difference.Integral()))
     event_text.SetNDC()
     # event_text.SetTextAlign(22)
-    sigma_text = ROOT.TText(
-        0.55, 0.6, "Sigma: %.3f +- %.3f [ns]" % (sigma, sigma_error)
-    )
+    sigma_text = TText(0.55, 0.6, "Sigma: %.3f +- %.3f [ns]" % (sigma, sigma_error))
     sigma_text.SetNDC()
     # event_text.SetTextAlign(22)
-    channel_text = ROOT.TText(
-        0.55, 0.7, "channel: %i BV:" % (channel) + BV[config] + "V"
+    channel_text = TText(
+        0.55, 0.7, "channel: %i BV:" % (channel) + BV[configurations[0]] + "V"
     )
     channel_text.SetNDC()
 
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
+    canvas = TCanvas("canvas", "canvas", 800, 600)
     time_difference.Draw("hist e")
     fit.Draw("Same")
     event_text.Draw("Same")
@@ -377,28 +372,46 @@ def Get_time_resolution(hist, config, channel, plot_name, plot_path):
     return sigma, sigma_error
 
 
-def Draw_bias_scan(
+def SaveFigure(fig, outputDirectory, name):
+    # Create the directory if doesn't exist
+    os.makedirs(outputDirectory, exist_ok=True)
+    fig.savefig(outputDirectory + name + ".pdf", bbox_inches="tight")
+    fig.savefig(outputDirectory + name + ".png", bbox_inches="tight", dpi=300)
+    print(outputDirectory + name + " Has been created")
+
+
+def draw_bias_scan(
     voltages, sigma, error, channel, plot_name, plot_path, use_low_voltage=False
 ):
+    fig, axs = plt.subplots(1, 1, constrained_layout=True)
+    # For one column
+    width = 6
+    height = width / 1.2
 
-    xtitle = "Bias Current [V]" if not use_low_voltage else "Board low voltage [V]"
+    fig.set_size_inches(width, height)
+
+    xtitle = "Bias voltage [V]" if not use_low_voltage else "Board low voltage [V]"
     htitle = "Bias scan" if not use_low_voltage else "Board low voltage scan"
-    if channel == 3:
-        htitle += " Dt Corrected"
+    if use_low_voltage:
+        axs.set_xlim(min(voltages) - 0.02, max(voltages) + 0.02)
+    else:
+        axs.set_xlim(min(voltages) - 5, max(voltages) + 5)
+        axs.set_xticks([150, 160, 170, 180, 190, 200])
 
-    graph = create_TGraph(
+    axs.errorbar(
         voltages,
-        sigma,
-        ex=np.zeros(len(voltages)),
-        ey=error,
-        axis_title=[xtitle, "Time resolution [ns]"],
+        np.array(sigma) * 1000,
+        np.array(error) * 1000,
+        marker="o",
+        linestyle="-",
+        markerfacecolor="black",
+        color="black",
+        markersize=4.5,
+        # label= "T",
     )
-    graph.SetTitle(htitle)
 
-    graph.SetMarkerStyle(8)
-    graph.SetMarkerSize(0.8)
-    graph.SetMarkerColor(ROOT.kBlack)
+    axs.set_ylabel("Time resolution [ps]", loc="center", fontsize=15)
+    axs.set_xlabel(xtitle, loc="center", fontsize=15)
+    axs.set_title(htitle, fontsize="small")
 
-    canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
-    graph.Draw("ALP")
-    canvas.SaveAs(plot_path + plot_name + ".png")
+    SaveFigure(fig, plot_path, plot_name)
