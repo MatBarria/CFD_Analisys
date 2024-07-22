@@ -14,6 +14,11 @@ from configurations import (
 
 from histo_utilities import create_TGraph, create_TH1D, create_TH2D
 
+import matplotlib.pyplot as plt
+import mplhep as hep
+
+plt.style.use(hep.style.CMS)  # or ATLAS/LHCb2
+
 
 def get_tracker_cuts(branches):
     amplitudes = branches["amp"].array()
@@ -239,8 +244,6 @@ def do_polonomial_fit(
 
     # graph.Fit(fit, "R", "", amplitud_min, amplitud_max);
     graph.Fit(fit, "QR", "", amplitud_min, amplitud_max)
-    # for i in range(0, fit.GetNpar()):
-    # print("Fit parameter %i: %.5f"%(i, fit.GetParameter(i)))
 
     graph.SetMarkerStyle(8)
     graph.SetMarkerSize(0.8)
@@ -287,7 +290,6 @@ def get_deltaT_vs_amplitud_corrected(
 
     deltaT = (channel_time - tracker_time) * 1e9
 
-    # TODO: I know this can be automatized but idk how to get a power of an array...
     number_of_paremeters = fit.GetNpar()
     corrected_deltaT = np.array(deltaT)
     for i in range(0, number_of_paremeters):
@@ -370,27 +372,46 @@ def get_time_resolution(hist, configurations, channel, plot_name, plot_path):
     return sigma, sigma_error
 
 
+def SaveFigure(fig, outputDirectory, name):
+    # Create the directory if doesn't exist
+    os.makedirs(outputDirectory, exist_ok=True)
+    fig.savefig(outputDirectory + name + ".pdf", bbox_inches="tight")
+    fig.savefig(outputDirectory + name + ".png", bbox_inches="tight", dpi=300)
+    print(outputDirectory + name + " Has been created")
+
+
 def draw_bias_scan(
     voltages, sigma, error, channel, plot_name, plot_path, use_low_voltage=False
 ):
-    xtitle = "Bias Current [V]" if not use_low_voltage else "Board low voltage [V]"
+    fig, axs = plt.subplots(1, 1, constrained_layout=True)
+    # For one column
+    width = 6
+    height = width / 1.2
+
+    fig.set_size_inches(width, height)
+
+    xtitle = "Bias voltage [V]" if not use_low_voltage else "Board low voltage [V]"
     htitle = "Bias scan" if not use_low_voltage else "Board low voltage scan"
-    if channel == 3:
-        htitle += " Dt Corrected"
+    if use_low_voltage:
+        axs.set_xlim(min(voltages) - 0.02, max(voltages) + 0.02)
+    else:
+        axs.set_xlim(min(voltages) - 5, max(voltages) + 5)
+        axs.set_xticks([150, 160, 170, 180, 190, 200])
 
-    graph = create_TGraph(
+    axs.errorbar(
         voltages,
-        sigma,
-        ex=np.zeros(len(voltages)),
-        ey=error,
-        axis_title=[xtitle, "Time resolution [ns]"],
+        np.array(sigma) * 1000,
+        np.array(error) * 1000,
+        marker="o",
+        linestyle="-",
+        markerfacecolor="black",
+        color="black",
+        markersize=4.5,
+        # label= "T",
     )
-    graph.SetTitle(htitle)
 
-    graph.SetMarkerStyle(8)
-    graph.SetMarkerSize(0.8)
-    graph.SetMarkerColor(kBlack)
+    axs.set_ylabel("Time resolution [ps]", loc="center", fontsize=15)
+    axs.set_xlabel(xtitle, loc="center", fontsize=15)
+    axs.set_title(htitle, fontsize="small")
 
-    canvas = TCanvas("canvas", "canvas", 800, 600)
-    graph.Draw("ALP")
-    canvas.SaveAs(plot_path + plot_name + ".png")
+    SaveFigure(fig, plot_path, plot_name)
